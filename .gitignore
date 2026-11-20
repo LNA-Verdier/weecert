@@ -1,0 +1,8 @@
+node_modules/
+__pycache__/
+.pytest_cache/
+tests/output/
+# Exports et migrations de données : ne jamais les publier (questions importées, progression)
+migration/
+*.export.json
+*.local.sql
