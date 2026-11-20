@@ -3,7 +3,10 @@
 // (doc(path).get/set/delete/onSnapshot, collection(path).onSnapshot) et une API « user ».
 // Ce module fournit ces deux API au-dessus de Supabase, puis lance l'application une fois connecté.
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config.js";
+import * as CFG from "../config.js";
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = CFG;
+// EMAILS = false : pas d'e-mails envoyés (ni confirmation, ni mot de passe oublié)
+const EMAILS = CFG.EMAILS !== false;
 
 const HOME = location.origin + location.pathname;
 const $ = (s) => document.querySelector(s);
@@ -42,6 +45,7 @@ function renderAuth() {
   else if (mode === "config") h = `<div class="card"><b class="astrong">WeeCert n'est pas encore configuré</b><p>Renseigne l'adresse et la clé publique de ton projet Supabase dans <code>config.js</code>, puis recharge la page (voir README).</p></div>`;
   else if (mode === "login") h = `${seg("login")}<form id="aform" class="aform" novalidate>${field("aEmail", "Adresse e-mail", "email", 'autocomplete="email" required')}${field("aPass", "Mot de passe", "password", 'autocomplete="current-password" required')}${msgHtml()}<button class="btn" type="submit">Se connecter</button><button class="alink" type="button" data-auth="forgot">Mot de passe oublié ?</button></form>`;
   else if (mode === "signup") h = `${seg("signup")}<form id="aform" class="aform" novalidate>${field("aName", "Prénom", "text", 'autocomplete="given-name" maxlength="40" required')}${field("aEmail", "Adresse e-mail professionnelle", "email", 'autocomplete="email" required')}${field("aPass", "Mot de passe (10 caractères minimum)", "password", 'autocomplete="new-password" minlength="10" required')}<p class="note">L'inscription est réservée aux adresses ajoutées par l'administrateur de WeeCert.</p>${msgHtml()}<button class="btn" type="submit">Créer mon compte</button></form>`;
+  else if (mode === "forgot" && !EMAILS) h = `<div class="card"><b class="astrong">Mot de passe oublié</b><p>Demande à l'administrateur de WeeCert de réinitialiser ton mot de passe, puis connecte-toi avec le mot de passe provisoire qu'il te donnera.</p><button class="btn ghost" type="button" data-auth="login">Retour à la connexion</button></div>`;
   else if (mode === "forgot") h = `<form id="aform" class="aform" novalidate><b class="astrong">Mot de passe oublié</b><p class="note">Saisis ton adresse : tu recevras un lien pour choisir un nouveau mot de passe.</p>${field("aEmail", "Adresse e-mail", "email", 'autocomplete="email" required')}${msgHtml()}<button class="btn" type="submit">Envoyer le lien</button><button class="alink" type="button" data-auth="login">Retour à la connexion</button></form>`;
   else if (mode === "recover") h = `<form id="aform" class="aform" novalidate><b class="astrong">Nouveau mot de passe</b>${field("aPass", "Nouveau mot de passe (10 caractères minimum)", "password", 'autocomplete="new-password" minlength="10" required')}${msgHtml()}<button class="btn" type="submit">Enregistrer</button></form>`;
   else if (mode === "checkmail") h = `<div class="card"><b class="astrong">Vérifie ta boîte mail</b><p>${esc(msg ? msg.text : "")}</p><button class="btn ghost" type="button" data-auth="login">Retour à la connexion</button></div>`;
@@ -262,7 +266,8 @@ window.WEE = {
     const acc = `<div class="sec-title">Mon compte</div>
   <div class="card"><div class="acct"><div><b class="astrong">${esc(me.name || me.email)}</b><span class="note">${esc(me.email)} · ${ROLE_LABEL[me.role] || "Utilisateur"}</span></div><button class="btn ghost small" data-act="wee-logout">Se déconnecter</button></div>
   <p class="note" style="margin:0">${me.role === "user" ? "Tu suis les cours et les questions, ta progression est partagée avec l'équipe." : "Tu suis les cours et tu peux importer ou remplacer les questions de l'équipe."}</p>
-  <label class="afield" for="weeName"><span>Prénom affiché dans le classement</span><span class="arow"><input id="weeName" class="txtin" maxlength="40" value="${esc(me.name)}"><button class="btn small" data-act="wee-name">Enregistrer</button></span></label></div>`;
+  <label class="afield" for="weeName"><span>Prénom affiché dans le classement</span><span class="arow"><input id="weeName" class="txtin" maxlength="40" value="${esc(me.name)}"><button class="btn small" data-act="wee-name">Enregistrer</button></span></label>
+  <label class="afield" for="weePass"><span>Nouveau mot de passe (10 caractères minimum, lettres et chiffres)</span><span class="arow"><input id="weePass" class="txtin" type="password" autocomplete="new-password" minlength="10"><button class="btn small" data-act="wee-pass">Changer</button></span></label></div>`;
     if (me.role !== "owner") return acc;
     if (!team.list && !team.loading) loadTeam();
     const rows = (team.list || []).map((m) => {
@@ -296,6 +301,13 @@ document.addEventListener("click", async (e) => {
     me.name = v; names[me.id] = { name: v, role: me.role };
     try { S.names[me.id] = v; } catch (err) { /* ignore */ }
     note("Prénom enregistré"); rerenderProfile(); return;
+  }
+  if (a === "wee-pass") {
+    const v = $("#weePass")?.value || "";
+    if (v.length < 10 || !/[a-z]/i.test(v) || !/\d/.test(v)) return note("10 caractères minimum, avec des lettres et des chiffres");
+    const { error } = await sb.auth.updateUser({ password: v });
+    if (error) return note(authError(error));
+    $("#weePass").value = ""; note("Mot de passe changé"); return;
   }
   if (me.role !== "owner") return;
   if (a === "wee-add") {

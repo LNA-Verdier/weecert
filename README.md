@@ -33,12 +33,13 @@ Les questions importées (par exemple depuis des fichiers CSV) ne sont **jamais*
    insert into public.members (email, role) values ('ton.adresse@exemple.fr', 'owner');
    ```
 3. **Authentification** :
-   - *Authentication → Sign In / Providers → Email* : activé, *Confirm email* coché, mot de passe de 10 caractères minimum avec lettres et chiffres.
+   - *Authentication → Sign In / Providers* : *Allow new users to sign up* activé (la liste `members` bloque toute adresse non autorisée).
+   - *Email* : activé, *Confirm email* **désactivé**, mot de passe de 10 caractères minimum avec lettres et chiffres.
    - *Authentication → URL Configuration* : *Site URL* et *Redirect URLs* = `https://lna-verdier.github.io/weecert/`.
-   - *Authentication → Emails → SMTP Settings* : un service d'envoi (Brevo, Resend…) est nécessaire pour envoyer les e-mails de confirmation à des adresses extérieures au projet Supabase. Le même service que pour Sinema peut servir.
+   - WeeCert fonctionne sans envoi d'e-mails (`EMAILS = false` dans `config.js`). Pour activer la confirmation d'adresse et « Mot de passe oublié », configurer un service d'envoi dans *Authentication → Emails → SMTP Settings* (Brevo, Resend…), réactiver *Confirm email*, puis passer `EMAILS` à `true`.
 4. Renseigner `config.js` avec le *Project URL* et la clé *anon public* (*Project Settings → API*).
 5. **GitHub Pages** : *Settings → Pages → Deploy from a branch → main / (root)*.
-6. Ouvrir le site, cliquer sur **Créer mon compte** avec l'adresse déclarée à l'étape 2, puis confirmer l'adresse.
+6. Ouvrir le site et cliquer sur **Créer mon compte** avec l'adresse déclarée à l'étape 2.
 
 Pour tester en local : `python3 -m http.server 8000` puis ouvrir http://localhost:8000.
 
@@ -50,6 +51,18 @@ Dans le site, onglet **Profil → Équipe et accès** (visible du seul propriét
 2. Lui envoyer le lien du site : il clique sur **Créer mon compte** avec cette adresse.
 3. Le bouton à côté de son adresse le fait passer **Utilisateur** ou **Administrateur** (les administrateurs peuvent importer des questions).
 4. La croix retire l'adresse : la personne perd l'accès et disparaît du classement.
+
+## Mot de passe oublié
+
+Sans service d'envoi d'e-mails, le propriétaire réinitialise le mot de passe dans *SQL Editor* avec un mot de passe provisoire :
+
+```sql
+update auth.users
+   set encrypted_password = extensions.crypt('Provisoire2026', extensions.gen_salt('bf'))
+ where email = 'prenom.nom@entreprise.fr';
+```
+
+La personne se connecte avec ce mot de passe, puis le change dans **Profil → Mon compte**.
 
 ## Sécurité
 

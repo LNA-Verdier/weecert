@@ -15,6 +15,7 @@ const TYPES = { ".html": "text/html", ".js": "text/javascript", ".svg": "image/s
 const OWNER = "11111111-1111-1111-1111-111111111111";
 const USER = "22222222-2222-2222-2222-222222222222";
 const SEED = {
+  autoConfirm: true,
   members: [
     { email: "lolo@exemple.fr", role: "owner", user_id: OWNER, display_name: "Loïc", password: "motdepasse42" },
     { email: "camille@exemple.fr", role: "user", user_id: USER, display_name: "Camille", password: "motdepasse42" },
@@ -47,7 +48,7 @@ async function page() {
   await ctx.route("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm", async (r) =>
     r.fulfill({ contentType: "text/javascript", body: await readFile(join(ROOT, "tests/e2e/fake_supabase.js"), "utf8") }));
   await ctx.route("**/config.js", (r) => r.fulfill({ contentType: "text/javascript",
-    body: 'export const SUPABASE_URL="https://test.supabase.co";export const SUPABASE_ANON_KEY="test";' }));
+    body: 'export const SUPABASE_URL="https://test.supabase.co";export const SUPABASE_ANON_KEY="test";export const EMAILS=false;' }));
   await ctx.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   const p = await ctx.newPage();
   const errors = [];
@@ -118,7 +119,27 @@ try {
   check(!(await u.p.isVisible("text=Équipe et accès")), "la gestion de l'équipe est réservée au propriétaire");
   check(await u.p.evaluate(() => localStorage.getItem("briko:uid")) === USER, "le cache local est propre au compte connecté");
   check(u.errors.length === 0, `aucune erreur JavaScript côté utilisatrice${u.errors.length ? " : " + u.errors.join(" | ") : ""}`);
-  await u.ctx.close(); await ctx.close();
+  await u.ctx.close();
+
+  // Nouvelle personne autorisée : inscription sans e-mail de confirmation, puis changement de mot de passe
+  const n = await page();
+  await n.p.evaluate((s) => { const o = JSON.parse(s); o.session = null; localStorage.setItem("fake-sb", JSON.stringify(o)); }, storage);
+  await n.p.reload();
+  await n.p.waitForSelector("#aEmail");
+  await n.p.click('[data-auth="forgot"]');
+  check(await n.p.isVisible("text=Demande à l'administrateur"), "sans e-mails, « mot de passe oublié » renvoie vers l'administrateur");
+  await n.p.click('[data-auth="login"]'); await n.p.click('[data-auth="signup"]');
+  await n.p.fill("#aName", "Nina"); await n.p.fill("#aEmail", "nouveau@exemple.fr"); await n.p.fill("#aPass", "motdepasse42");
+  await n.p.click('#aform button[type="submit"]');
+  await n.p.waitForFunction(() => document.getElementById("auth").hidden && typeof S !== "undefined" && S.online, null, { timeout: 8000 });
+  check(true, "une adresse autorisée crée son compte et entre directement");
+  await n.p.click('.tab[data-tab="profile"]');
+  await n.p.fill("#weePass", "nouveaumdp99");
+  await n.p.click('[data-act="wee-pass"]');
+  await n.p.waitForFunction(() => window.__fake.passwords["nouveau@exemple.fr"] === "nouveaumdp99", null, { timeout: 5000 });
+  check(true, "chacun peut changer son mot de passe depuis son profil");
+  check(n.errors.length === 0, `aucune erreur JavaScript à l'inscription${n.errors.length ? " : " + n.errors.join(" | ") : ""}`);
+  await n.ctx.close(); await ctx.close();
 } catch (e) {
   console.log("ÉCHEC : " + e.message); failures++;
 } finally {

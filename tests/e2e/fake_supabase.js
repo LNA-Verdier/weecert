@@ -86,12 +86,14 @@ export function createClient() {
       if (!m) return { data: {}, error: { message: "Database error saving new user" } };
       if (m.user_id) return { data: {}, error: { message: "User already registered" } };
       m.user_id = crypto.randomUUID(); m.display_name = m.display_name || options?.data?.name || null;
-      st.passwords[email] = password; save();
-      return { data: { session: null, user: { id: m.user_id } }, error: null };
+      st.passwords[email] = password;
+      if (seed.autoConfirm) st.session = { user: { id: m.user_id, email } };
+      save();
+      return { data: { session: seed.autoConfirm ? st.session : null, user: { id: m.user_id } }, error: null };
     },
     async signOut() { st.session = null; save(); listeners.forEach((fn) => fn("SIGNED_OUT", null)); return { error: null }; },
     async resetPasswordForEmail() { return { error: null }; },
-    async updateUser() { return { data: {}, error: null }; },
+    async updateUser({ password } = {}) { if (password && st.session) { st.passwords[st.session.user.email] = password; save(); } return { data: {}, error: null }; },
   };
 
   async function rpc(name, args) {
